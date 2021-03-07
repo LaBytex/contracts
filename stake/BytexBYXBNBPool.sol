@@ -22,18 +22,11 @@ contract BytexBYXBNBPool is StakeWrapper {
   }
 
   /**
-   * @dev wrapper for staking without referral
-   */
-  function stake(uint256 stakeAmount) public {
-    stake(stakeAmount, address(0x0));
-  }
-
-  /**
    * @dev stake specified amount of tokens
    */
-  function stake(uint256 stakeAmount, address _referrer) public {
+  function stake(uint256 stakeAmount) public {
     address userAddr = msg.sender;
-    stakeHelper(userAddr, stakeAmount, _referrer);
+    stakeHelper(userAddr, stakeAmount);
     lpToken.transferFrom(userAddr, address(this), stakeAmount);
   }
 
@@ -56,7 +49,7 @@ contract BytexBYXBNBPool is StakeWrapper {
     totalStaked = totalStaked.sub(amount);
     user.investment = user.investment.sub(amount, 'Unstake: Insufficient funds');
     safeLPTokenTransfer(msg.sender, amount.mul(uint256(100).sub(unstakeFee)).div(100));
-    emit UserAction('Unstake', user.addr, user.referrer, amount);
+    emit UserAction('Unstake', user.addr, amount);
   }
 
   /**
@@ -80,18 +73,12 @@ contract BytexBYXBNBPool is StakeWrapper {
   function user(address _address) view public returns (
     uint256 investment,
     uint256 lastClaim,
-    address referrer,
-    uint256 referralReward,
-    uint256 totalReferrals,
     uint256 pendingRewards,
     uint256 tokenBalance,
     uint256 balance
   ) {
     investment = users[_address].investment;
     lastClaim = users[_address].lastClaim;
-    referrer = users[_address].referrer;
-    referralReward = users[_address].referralReward;
-    totalReferrals = users[_address].totalReferrals;
     pendingRewards = claimableReward(_address);
     tokenBalance = bytexToken.balanceOf(_address);
     balance = lpToken.balanceOf(_address);
