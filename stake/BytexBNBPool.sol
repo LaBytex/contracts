@@ -17,20 +17,13 @@ contract BytexBNBPool is StakeWrapper {
   ) StakeWrapper(_bytexToken, _rateLimiter, _unstakeFee, levelLimit, levelRate) public {}
 
   /**
-   * @dev wrapper for staking without referral
-   */
-  function stake() public payable {
-    stake(address(0x0));
-  }
-
-  /**
    * @dev stake specified amount of tokens
    */
-  function stake(address _referrer) public payable {
+  function stake() public payable {
     uint256 stakeAmount = msg.value;
     address userAddr = msg.sender;
     require(stakeAmount >= 1 * 1e17, "Too low value");
-    stakeHelper(userAddr, stakeAmount, _referrer);
+    stakeHelper(userAddr, stakeAmount);
   }
 
   /**
@@ -53,7 +46,7 @@ contract BytexBNBPool is StakeWrapper {
     user.investment = user.investment.sub(amount, 'Unstake: Insufficient funds');
     safeSendValue(msg.sender, amount.mul(uint256(100).sub(unstakeFee)).div(100));
 
-    emit UserAction('Unstake', user.addr, user.referrer, amount);
+    emit UserAction('Unstake', user.addr, amount);
   }
 
   /**
@@ -77,18 +70,12 @@ contract BytexBNBPool is StakeWrapper {
   function user(address _address) view public returns (
     uint256 investment,
     uint256 lastClaim,
-    address referrer,
-    uint256 referralReward,
-    uint256 totalReferrals,
     uint256 pendingRewards,
     uint256 tokenBalance,
     uint256 balance
   ) {
     investment = users[_address].investment;
     lastClaim = users[_address].lastClaim;
-    referrer = users[_address].referrer;
-    referralReward = users[_address].referralReward;
-    totalReferrals = users[_address].totalReferrals;
     pendingRewards = claimableReward(_address);
     tokenBalance = bytexToken.balanceOf(_address);
     balance = _address.balance;
