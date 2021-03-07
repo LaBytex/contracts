@@ -19,10 +19,7 @@ contract StakeWrapper is Ownable{
   struct User {
     uint256 investment;
     uint256 lastClaim;
-    uint256 referralReward;
-    uint256 totalReferrals;
     address addr;
-    address referrer;
     bool exists;
   }
 
@@ -40,10 +37,8 @@ contract StakeWrapper is Ownable{
   Level[] public levels;
   IBEP20 public bytexToken; 
 
-  event UserAction(string _type, address indexed _user, address indexed _referrer, uint256 _amount);
+  event UserAction(string _type, address indexed _user, uint256 _amount);
   event LevelChanged(uint256 _newLevel, uint256 _timestamp);
-  event NewReferral(address indexed _user, address _referral);
-  event ClaimReferral(address indexed _user, uint256 _amount);
 
   /**
    * @dev initialize contract with required staking config
@@ -62,7 +57,6 @@ contract StakeWrapper is Ownable{
     user.exists = true;
     user.addr = msg.sender;
     user.investment = 0;
-    user.referrer = msg.sender;
     user.lastClaim = block.timestamp;
 
     rateLimiter = _rateLimiter;
@@ -77,38 +71,30 @@ contract StakeWrapper is Ownable{
   /**
    * @dev stake specified amount of tokens
    */
-  function stakeHelper(address userAddr, uint256 stakeAmount, address _referrer) internal {
+  function stakeHelper(address userAddr, uint256 stakeAmount) internal {
     require(userAddr != owner(), "Owner can't stake");
     updateAlloted();
-    address referrer = _referrer == address(0x0) ? owner() : _referrer;
-    if (!users[referrer].exists) {
-      referrer = owner();
-    }
 
     if (!users[userAddr].exists) {
-      register(userAddr, referrer, stakeAmount);
+      register(userAddr, stakeAmount);
     } else {
       claimRewardHelper();
       users[userAddr].investment = users[userAddr].investment.add(stakeAmount);
     }
     totalStaked = totalStaked.add(stakeAmount);
     platformFees = platformFees.add(stakeAmount.mul(unstakeFee).div(100));
-    emit UserAction('Stake', userAddr, referrer, stakeAmount);
+    emit UserAction('Stake', userAddr, stakeAmount);
   }
 
   /**
    * @dev on user's initial stake setup user details in contract
    */
-  function register(address userAddr, address referrer, uint256 amount) internal {
+  function register(address userAddr, uint256 amount) internal {
     User storage user = users[userAddr];
     user.exists = true;
     user.addr = userAddr;
-    user.referrer = referrer;
     user.investment = amount;
     user.lastClaim = block.timestamp;
-
-    users[referrer].totalReferrals = users[referrer].totalReferrals.add(1);
-    emit NewReferral(referrer, userAddr);
   }
 
   /**
@@ -117,18 +103,6 @@ contract StakeWrapper is Ownable{
   function claimReward() public {
     updateAlloted();
     claimRewardHelper();
-  }
-
-  /**
-   * @dev claim user referral reward
-   */
-  function claimReferralReward() public {
-    updateAlloted();
-    User storage user = users[msg.sender];
-    uint256 refReward = user.referralReward;
-    user.referralReward = 0;
-    safeTokenTransfer(user.addr, refReward);
-    emit ClaimReferral(user.addr, refReward);
   }
 
   /**
@@ -146,8 +120,6 @@ contract StakeWrapper is Ownable{
                 .div(REWARD_INTERVAL)
                 .mul(levels[currentLevel].rate)
                 .div(rateLimiter);
-      // Add ref percent
-      toAllot = toAllot.add(toAllot.mul(REF_REWARD_PERCENT).div(100));
 
       levels[currentLevel].alloted = levels[currentLevel].alloted.add(toAllot);
 
@@ -171,21 +143,11 @@ contract StakeWrapper is Ownable{
     User storage user = users[msg.sender];
 
     require(user.exists, 'Invalid User');
-
     uint256 reward = claimableReward(msg.sender);
-
     user.lastClaim = block.timestamp;
-
-    uint256 referralReward = reward.mul(REF_REWARD_PERCENT).div(100);
-
     safeTokenTransfer(user.addr, reward);
 
-    users[user.referrer].referralReward = users[user.referrer]
-      .referralReward
-      .add(referralReward);
-
-    emit UserAction('ClaimReward', user.addr, user.referrer, reward);
-    emit UserAction('ReferralReward', user.referrer, user.addr, referralReward);
+    emit UserAction('ClaimReward', user.addr, reward);
   }
 
   /**
