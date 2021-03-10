@@ -82,6 +82,11 @@ contract BytexRoulette is Ownable {
   }
   
   /**
+   * @dev - to deposit BNB fund to the contract
+   */
+  receive() external payable {}
+  
+  /**
    * @dev - initiate game with BNB
    */
   function playGame(bytes32 _seed, uint[] memory _x, uint[] memory _y, bytes32 _choiceHash) public payable {
@@ -115,7 +120,7 @@ contract BytexRoulette is Ownable {
 
     uint totalVal = 0;
     for (uint i=0; i<_x.length; i++) {
-        totalVal = sum(totalVal, _x[i]);
+        totalVal = add(totalVal, _x[i]);
     }
     require(_amount == totalVal, "Invalid Bets!");
 
