@@ -28,7 +28,8 @@ contract StakeWrapper is Ownable{
   uint256 public lastMintTime;
   uint256 public rateLimiter;
   uint256 public currentLevel = 0;
-  uint256 public unstakeFee = 5;
+  uint256 public unstakeFee;
+
 
   uint256 constant REWARD_INTERVAL = 1 days;
 
@@ -47,7 +48,6 @@ contract StakeWrapper is Ownable{
     address _bytexToken,
     address _stakingToken, 
     uint256 _rateLimiter, 
-    uint256 _unstakeFee, 
     uint256[] memory levelLimit, 
     uint256[] memory levelRate
   ) public {
@@ -62,7 +62,6 @@ contract StakeWrapper is Ownable{
     user.lastClaim = block.timestamp;
 
     rateLimiter = _rateLimiter;
-    unstakeFee = _unstakeFee;
     lastMintTime = block.timestamp;
     
     for (uint8 i=0; i<levelLimit.length; ++i) {
@@ -73,7 +72,7 @@ contract StakeWrapper is Ownable{
   /**
    * @dev stake specified amount of tokens
    */
-  function stake(uint256 stakeAmount) public {
+  function stake(uint256 stakeAmount) external {
     address userAddr = msg.sender;
     stakeHelper(userAddr, stakeAmount);
     stakingToken.transferFrom(userAddr, address(this), stakeAmount);
@@ -111,7 +110,7 @@ contract StakeWrapper is Ownable{
   /**
    * @dev wrapper to unstake user's all tokens
    */
-  function unstake() public {
+  function unstakeAll() external {
     unstake(users[msg.sender].investment);
   }
 
@@ -133,7 +132,7 @@ contract StakeWrapper is Ownable{
   /**
    * @dev claim user rewards and update the contract staking progress
    */
-  function claimReward() public {
+  function claimReward() external {
     updateAlloted();
     claimRewardHelper();
   }
@@ -150,8 +149,8 @@ contract StakeWrapper is Ownable{
       uint256 toAllot =
               totalStaked
                 .mul(timePassed)
-                .div(REWARD_INTERVAL)
                 .mul(levels[currentLevel].rate)
+                .div(REWARD_INTERVAL)
                 .div(rateLimiter);
 
       levels[currentLevel].alloted = levels[currentLevel].alloted.add(toAllot);
@@ -184,18 +183,11 @@ contract StakeWrapper is Ownable{
   }
 
   /**
-   * @dev - calculate claimable rewards for function caller
-   */
-  function claimableReward() public view returns (uint256) {
-    return claimableReward(msg.sender);
-  }
-
-  /**
    * @dev - calculate claimable rewards for given wallet address
    */
   function claimableReward(address _address) public view returns (uint256 reward) {
     User memory user = users[_address];
-    uint256 lastClaim = user.lastClaim;
+    uint256 lastClaim = user.lastClaim; // to calculate rewards based on time in each level
     for (uint256 lvl = 0; lvl <= currentLevel; ++lvl) {
       uint256 time = (levels[lvl].completeTime == 0) ? block.timestamp : levels[lvl].completeTime;
       if (users[_address].lastClaim >= time) {
@@ -204,21 +196,29 @@ contract StakeWrapper is Ownable{
       reward = reward.add(
         user.investment
           .mul(time.sub(lastClaim))
-          .div(REWARD_INTERVAL)
           .mul(levels[lvl].rate)
+          .div(REWARD_INTERVAL)
           .div(rateLimiter)
       );
       if (time == block.timestamp) {
         break;
       }
-      lastClaim = time;
+      lastClaim = time; // update lastClaim to the processed level completion time
     }
+  }
+
+  /**
+   * @dev - set the withdrawal fee for the pool upto 5%
+   */
+  function setWithdrawalFees(uint256 fee) external onlyOwner {
+    require(fee <= 5, "Fee cannot be over 5%");
+    unstakeFee = fee;
   }
 
   /**
    * @dev wrapper to withdraw the whole of accumulated platform fees
    */
-  function withdrawFees() public onlyOwner returns (uint256) {
+  function withdrawAllFees() external onlyOwner returns (uint256) {
     return withdrawFees(owner(), platformFees);
   }
 
@@ -233,7 +233,7 @@ contract StakeWrapper is Ownable{
   /**
    * @dev user stake details
    */
-  function user(address _address) view public returns (
+  function user(address _address) view external returns (
     uint256 investment,
     uint256 lastClaim,
     uint256 pendingRewards,
@@ -250,7 +250,7 @@ contract StakeWrapper is Ownable{
   /**
    * @dev view current status of staking
    */
-  function stats() view public returns (
+  function stats() view external returns (
     uint256 level,
     uint256 levelYield,
     uint256 levelSupply,
