@@ -3,10 +3,12 @@ pragma solidity ^0.6.6;
 
 import "../Ownable.sol";
 import "../IBEP20.sol";
+import "../SafeMath.sol";
 import "./RoulettePayout.sol";
 
 contract BytexRoulette is Ownable {
 
+  using SafeMath for *;
   using RoulettePayout for *;
 
   struct Game {
@@ -32,6 +34,8 @@ contract BytexRoulette is Ownable {
 
   uint public played;
   uint public winnings;
+  uint public bnbInPlay;
+  uint public byxInPlay;
   uint public maxPayOutBNB = 10 * 1e18;
   uint public maxPayOutBYX = 20000 * 1e18;
 
@@ -56,16 +60,16 @@ contract BytexRoulette is Ownable {
     _;
   }
 
-  function addCroupier(address _croupier) public onlyOwner {
+  function addCroupier(address _croupier) external onlyOwner {
     croupiers[_croupier] = true;
   }
 
-  function removeCroupier(address _croupier) public onlyOwner {
+  function removeCroupier(address _croupier) external onlyOwner {
     croupiers[_croupier] = false;
   }
 
   function updateBetConf(uint _minBet, uint _maxBet, uint _maxPayOutBNB, 
-    uint _byxMinBet, uint _byxMaxBet, uint _maxPayOutBYX) public onlyOwner {
+    uint _byxMinBet, uint _byxMaxBet, uint _maxPayOutBYX) external onlyOwner {
     MIN_BET = _minBet;
     MAX_BET = _maxBet;
     maxPayOutBNB = _maxPayOutBNB;
@@ -74,7 +78,7 @@ contract BytexRoulette is Ownable {
     maxPayOutBYX  = _maxPayOutBYX;
   }
 
-  function updateBYCRate(uint _bnbRate, uint _bnbBycRateOptimizer, uint _byxRate, uint _byxBycRateOptimizer) public onlyOwner {
+  function updateBYCRate(uint _bnbRate, uint _bnbBycRateOptimizer, uint _byxRate, uint _byxBycRateOptimizer) external onlyOwner {
       bnbRewardRate = _bnbRate;
       bnbBycRateOptimizer = _bnbBycRateOptimizer;
       byxRewardRate = _byxRate;
@@ -89,19 +93,21 @@ contract BytexRoulette is Ownable {
   /**
    * @dev - initiate game with BNB
    */
-  function playGame(bytes32 _seed, uint[] memory _x, uint[] memory _y, bytes32 _choiceHash) public payable {
+  function playGame(bytes32 _seed, uint[] calldata _x, uint[] calldata _y, bytes32 _choiceHash) external payable {
     require (msg.value >= MIN_BET && msg.value <= MAX_BET, "Amount out of range");
     _playGame(_seed, _x, _choiceHash, msg.value, 0);
+    bnbInPlay = bnbInPlay.add(msg.value);
     emit GameStarted(msg.sender, _seed, msg.value, 0);
   }
 
   /**
    * @dev - initiate game with BYX token
    */
-  function playGameWithBYX(bytes32 _seed, uint[] memory _x, uint[] memory _y, bytes32 _choiceHash, uint _amount) public {
+  function playGameWithBYX(bytes32 _seed, uint[] calldata _x, uint[] calldata _y, bytes32 _choiceHash, uint _amount) external {
     require (_amount >= BYX_MIN_BET && _amount <= BYX_MAX_BET, "Amount out of range");
     _playGame(_seed, _x, _choiceHash, _amount, 1);
     byxToken.transferFrom(msg.sender, address(this), _amount);
+    byxInPlay = byxInPlay.add(_amount);
     emit GameStarted(msg.sender, _seed, _amount, 1);
   }
 
@@ -120,7 +126,7 @@ contract BytexRoulette is Ownable {
 
     uint totalVal = 0;
     for (uint i=0; i<_x.length; i++) {
-        totalVal = add(totalVal, _x[i]);
+      totalVal = totalVal.add(_x[i]);
     }
     require(_amount == totalVal, "Invalid Bets!");
 
@@ -135,12 +141,12 @@ contract BytexRoulette is Ownable {
    * @dev - validate croupier signature and bets hash to ensure data integrity. Process the game 
    * and provision winnings and/or rewards token for the game
    */
-  function confirm(bytes32 _seed, uint[] memory _x, uint[] memory _y, uint8 _v, bytes32 _r, bytes32 _s) public onlyCroupier {
+  function confirm(bytes32 _seed, uint[] calldata _x, uint[] calldata _y, uint8 _v, bytes32 _r, bytes32 _s) 
+    external onlyCroupier {
     
     bytes memory prefix = "\x19Ethereum Signed Message:\n32";
     bytes32 signatureHash = keccak256(abi.encodePacked(prefix, _seed));
-    address signedAddress = ecrecover(signatureHash, _v, _r, _s);
-    require (croupiers[signedAddress], "ECDSA signature is not valid.");
+    require (owner() == ecrecover(signatureHash, _v, _r, _s), "ECDSA signature is not valid.");
 
     Game storage game = games[_seed];
     require(game.player != address(0) && game.state == 1, "Invalid game state");
@@ -164,9 +170,11 @@ contract BytexRoulette is Ownable {
     
     uint rewardToken;
     if (game.currency == 0) {
-      rewardToken = safeRewardTokenTransfer(game.player, (game.bet/bnbBycRateOptimizer) * bnbRewardRate);
+      bnbInPlay = bnbInPlay.sub(game.bet);
+      rewardToken = safeRewardTokenTransfer(game.player, game.bet.mul(bnbRewardRate).div(bnbBycRateOptimizer));
     } else {
-      rewardToken = safeRewardTokenTransfer(game.player, (game.bet/byxBycRateOptimizer) * byxRewardRate);
+      byxInPlay = byxInPlay.sub(game.bet);
+      rewardToken = safeRewardTokenTransfer(game.player, game.bet.mul(byxRewardRate).div(byxBycRateOptimizer));
     }
 
     played = played + 1;
@@ -175,24 +183,20 @@ contract BytexRoulette is Ownable {
     emit GameResult(game.player, _seed, game.prize, rewardToken, game.result);
   }
 
-  function choiceHash(uint[] memory _x, uint[] memory _y) public pure returns(bytes32) {
+  function choiceHash(uint[] calldata _x, uint[] calldata _y) external pure returns(bytes32) {
     return keccak256(abi.encodePacked(_x, _y));
   } 
 
-  function stats() public view returns (uint gamesPlayed, uint totalWinnings){
+  function stats() external view returns (uint gamesPlayed, uint totalWinnings){
     gamesPlayed = played;
     totalWinnings = winnings;
   }
   
-  function collectProfit(address payable _to, uint _amount, uint _byxAmount) public onlyOwner {
+  function collectProfit(address payable _to, uint _amount, uint _byxAmount) external onlyOwner {
+    require(address(this).balance >= _amount.add(bnbInPlay), "Cannot collect BNB still in play");
+    require(byxToken.balanceOf(address(this)) >= _byxAmount.add(byxInPlay), "Cannot collect BYX still in play");
     safeBNBTransfer(_to, _amount);
     safeTokenTransfer(_to, _byxAmount);
-  }
-
-  function emergencyWithdrawal(address payable _to) public onlyOwner {
-    safeRewardTokenTransfer(_to, bycToken.balanceOf(address(this)));
-    safeTokenTransfer(_to, byxToken.balanceOf(address(this)));
-    safeBNBTransfer(_to, address(this).balance);
   }
 
   function safeBNBTransfer(address payable _to, uint _amount) internal {
@@ -210,13 +214,6 @@ contract BytexRoulette is Ownable {
     uint balance = byxToken.balanceOf(address(this));
     _amount = (_amount > balance) ? balance : _amount;
     byxToken.transfer(_to, _amount);
-  }
-
-  function add(uint a, uint b) internal pure returns (uint) {
-    uint c = a + b;
-    require(c >= a, "SafeMath: addition overflow");
-
-    return c;
   }
     
 }
