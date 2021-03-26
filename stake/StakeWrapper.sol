@@ -187,7 +187,7 @@ contract StakeWrapper is Ownable{
    */
   function claimableReward(address _address) public view returns (uint256 reward) {
     User memory user = users[_address];
-    uint256 lastClaim = user.lastClaim; // to calculate rewards based on time in each level
+    uint256 currentLvlClaimStart = user.lastClaim; // to calculate rewards based on time in each level
     for (uint256 lvl = 0; lvl <= currentLevel; ++lvl) {
       uint256 time = (levels[lvl].completeTime == 0) ? block.timestamp : levels[lvl].completeTime;
       if (users[_address].lastClaim >= time) {
@@ -195,7 +195,7 @@ contract StakeWrapper is Ownable{
       }
       reward = reward.add(
         user.investment
-          .mul(time.sub(lastClaim))
+          .mul(time.sub(currentLvlClaimStart))
           .mul(levels[lvl].rate)
           .div(REWARD_INTERVAL)
           .div(rateLimiter)
@@ -203,7 +203,7 @@ contract StakeWrapper is Ownable{
       if (time == block.timestamp) {
         break;
       }
-      lastClaim = time; // update lastClaim to the processed level completion time
+      currentLvlClaimStart = time; // update currentLvlClaimStart to the processed level completion time
     }
   }
 
