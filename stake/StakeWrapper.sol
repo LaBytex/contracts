@@ -2,7 +2,7 @@
 pragma solidity ^0.6.6;
 
 import "../SafeMath.sol";
-import "../IBEP20.sol";
+import "../IERC20.sol";
 import "../Ownable.sol";
 
 contract StakeWrapper is Ownable{
@@ -35,8 +35,8 @@ contract StakeWrapper is Ownable{
 
   mapping(address => User) public users;
   Level[] public levels;
-  IBEP20 public bytexToken; 
-  IBEP20 public stakingToken;
+  IERC20 public bytexToken; 
+  IERC20 public stakingToken;
 
   event UserAction(string _type, address indexed _user, uint256 _amount);
   event LevelChanged(uint256 _newLevel, uint256 _timestamp);
@@ -52,8 +52,8 @@ contract StakeWrapper is Ownable{
     uint256[] memory levelRate
   ) public {
 
-    bytexToken = IBEP20(_bytexToken);
-    stakingToken = IBEP20(_stakingToken);
+    bytexToken = IERC20(_bytexToken);
+    stakingToken = IERC20(_stakingToken);
 
     User storage user = users[msg.sender];
     user.exists = true;
@@ -203,7 +203,7 @@ contract StakeWrapper is Ownable{
       if (time == block.timestamp) {
         break;
       }
-      currentLvlClaimStart = time; // update currentLvlClaimStart to the processed level completion time
+      currentLvlClaimStart = time; // update currentlvlClaimStart to the processed level completion time
     }
   }
 
@@ -269,10 +269,10 @@ contract StakeWrapper is Ownable{
   /**
    * @dev transfer reward tokens to given user address
    */
-  function safeTokenTransfer(IBEP20 _bep20Token, address _to, uint256 _amount) internal returns (uint256 amount) {
-    uint256 balance = _bep20Token.balanceOf(address(this));
+  function safeTokenTransfer(IERC20 _erc20Token, address _to, uint256 _amount) internal returns (uint256 amount) {
+    uint256 balance = _erc20Token.balanceOf(address(this));
     amount = (_amount > balance) ? balance : _amount;
-    _bep20Token.transfer(_to, amount);
+    _erc20Token.transfer(_to, amount);
   }
 
 }

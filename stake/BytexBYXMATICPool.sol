@@ -3,7 +3,7 @@ pragma solidity ^0.6.6;
 
 import "./StakeWrapper.sol";
 
-contract BytexWBNBPool is StakeWrapper {
+contract BytexBYXMATICPool is StakeWrapper {
 
   /**
    * @dev initialize contract with required staking config

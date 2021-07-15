@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.6.6;
 
-interface IBEP20 {
+interface IERC20 {
   /**
    * @dev Returns the amount of tokens in existence.
    */

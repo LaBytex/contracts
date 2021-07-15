@@ -2,11 +2,11 @@
 pragma solidity ^0.6.6;
 
 import "./Context.sol";
-import "./IBEP20.sol";
+import "./IERC20.sol";
 import "./Ownable.sol";
 import "./SafeMath.sol";
 
-contract BEP20Token is Context, IBEP20, Ownable {
+contract ERC20Token is Context, IERC20, Ownable {
   using SafeMath for uint256;
 
   mapping (address => uint256) private _balances;
